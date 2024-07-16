@@ -106,7 +106,7 @@ class Llama3DualPrompt(Llama3ChatModel):
       matches_space = regex.findall(r'Final answer = \[([^\]]*)\]', clean_output)
       
       matches_combined = self.combine_lists(matches_underscore, matches_space)
-      matches_none = regex.findall(r'answer [\w*\s?]*: \[(([^\]]*))\]', clean_output)                 
+      matches_none = regex.findall(r'answer [\w*\s?]*: \[([^\]]*)\]', clean_output)                 
       return self.combine_lists(matches_combined, matches_none)
 
 
@@ -221,7 +221,10 @@ class Llama3DualPrompt(Llama3ChatModel):
 
     def disambiguate_entities(self, qa_answer: str):
         wikidata_ids = []
-        for entity in qa_answer:
+        qa_entities = [a.split(',') for a in qa_answer]
+        flat_entities = [x for xs in qa_entities for x in xs]
+
+        for entity in flat_entities:
             entity = entity.strip()
             if entity.startswith("and "):
                 entity = entity[4:].strip()
