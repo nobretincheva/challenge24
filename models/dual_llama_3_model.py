@@ -26,7 +26,6 @@ class Llama3DualPrompt(Llama3ChatModel):
             "Given a question, your task is to answer it with an explanation first. After doing so, provide just the direct answer as a list (e.g. [Yes] or [2023]). "
             "If the question can be answered simply with a yes or no - response should be [Yes] or [No] respectively."
             "If the question can be answered with a number - write out only the number e.g. [35]."
-            "If the question can be answered with anything else - follow the following rules:"
             "If there are multiple answers, separate them with a comma. "
             "If there are no answers, leave the list empty. "
             "Your final answer should be on the last line and should be formatted like this: final_answer = [YOUR FINAL ANSWER HERE]. ")
@@ -105,8 +104,10 @@ class Llama3DualPrompt(Llama3ChatModel):
       clean_output = output[0]["generated_text"][len(prompt):].strip()
       matches_underscore = regex.findall(r'final_answer = \[([^\]]*)\]', clean_output)
       matches_space = regex.findall(r'Final answer = \[([^\]]*)\]', clean_output)
-          
-      return self.combine_lists(matches_underscore, matches_space)
+      
+      matches_combined = self.combine_lists(matches_underscore, matches_space)
+      matches_none = regex.findall(r'answer [\w*\s?]*: \[(([^\]]*))\]', clean_output)                 
+      return self.combine_lists(matches_combined, matches_none)
 
 
     def use_looping_prompts(self, inp, info_strategy):
@@ -136,13 +137,14 @@ class Llama3DualPrompt(Llama3ChatModel):
 
         final_answer = []
         running_sum = 0
-        for i in range(start_count, end_count + 1):
+        for i in range(start_count, end_count):
           extra_info = str(i) + ' ' if inp["Relation"]=='awardWonBy' else str(i) + ' of '
           ith_answer = self.use_dual_prompting(inp, info_strategy=info_strategy, extra_info=extra_info)
           if inp["Relation"]=='seriesHasNumberOfEpisodes':
             try:
-              num_ep_per_season = int(ith_answer[0])
-              running_sum += num_ep_per_season
+              if ith_answer:
+                num_ep_per_season = int(ith_answer[0])
+                running_sum += num_ep_per_season
             except:
               logger.error(f"Error getting number of episodes for season {i} of " + inp["SubjectEntity"])
           else:
@@ -175,6 +177,9 @@ class Llama3DualPrompt(Llama3ChatModel):
             )
       second_phase = self.clean_output(output, first_prompt)
 
+      if not second_phase:
+        return []
+      
       if second_phase[0].lower() == 'yes':
         second_prompt = self.create_prompt(
                 subject_entity=extra_info + inp["SubjectEntity"],
@@ -188,7 +193,6 @@ class Llama3DualPrompt(Llama3ChatModel):
                 max_new_tokens=self.max_new_tokens,
                 eos_token_id=self.terminators,
             )
-
         return self.clean_output(output, second_prompt)
       else:
         return []
