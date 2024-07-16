@@ -141,7 +141,7 @@ class Llama3DualPrompt(Llama3ChatModel):
           ith_answer = self.use_dual_prompting(inp, info_strategy=info_strategy, extra_info=extra_info)
           if inp["Relation"]=='seriesHasNumberOfEpisodes':
             try:
-              num_ep_per_season = string(ith_answer[0])
+              num_ep_per_season = int(ith_answer[0])
               running_sum += num_ep_per_season
             except:
               logger.error(f"Error getting number of episodes for season {i} of " + inp["SubjectEntity"])
