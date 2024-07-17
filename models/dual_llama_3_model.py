@@ -209,7 +209,8 @@ class Llama3DualPrompt(Llama3ChatModel):
 
             qa_answer = self.use_looping_prompts(inp, info_strategy=info_strategy) if inp["Relation"] in loop_strategy else self.use_dual_prompting(inp, info_strategy=info_strategy)
 
-            wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
+            flat_answer = [x for xs in qa_answer for x in xs]
+            wikidata_ids = self.disambiguate_entities(flat_answer)
             results.append({
                 "SubjectEntityID": inp["SubjectEntityID"],
                 "SubjectEntity": inp["SubjectEntity"],
