@@ -23,7 +23,7 @@ class Llama3DualPrompt(Llama3ChatModel):
         super().__init__(config=config)
 
         self.system_message = (
-            "Given a question, your task is to answer it with an explanation first. After doing so, provide just the direct answer as a list (e.g. [Yes] or [2023]). "
+            "Given a question, your task is to self evaluate critically. After doing so, provide just the direct answer as a list (e.g. [Yes] or [2023]). "
             "If the question can be answered simply with a yes or no - response should be [Yes] or [No] respectively."
             "If the question can be answered with a number - write out only the number e.g. [35]."
             "If there are multiple answers, separate them with a comma. "
@@ -200,7 +200,7 @@ class Llama3DualPrompt(Llama3ChatModel):
     def generate_predictions(self, inputs):
         loop_strategy = ['awardWonBy', 'seriesHasNumberOfEpisodes']
         # hard coding for now; add with an input variable later on OR add to the prompts doc
-        info_strategy = ['additionalData']
+        info_strategy = ['additionalData', 'entityDescription']
 
         logger.info("Generating predictions...")
 
@@ -219,16 +219,36 @@ class Llama3DualPrompt(Llama3ChatModel):
 
         return results
 
+    def is_valid_wikidata_id(self, wiki_id):
+      return wiki_id.startswith("Q")
+
+
     def disambiguate_entities(self, qa_answer: str):
         wikidata_ids = []
         qa_entities = [a.split(',') for a in qa_answer]
         flat_entities = [x for xs in qa_entities for x in xs]
 
         for entity in flat_entities:
+            # further clean up string
             entity = entity.strip()
-            if entity.startswith("and "):
-                entity = entity[4:].strip()
-            wikidata_id = self.disambiguation_baseline(entity)
-            if wikidata_id:
-                wikidata_ids.append(wikidata_id)
+            entity = entity.replace('"', '')
+            entity = entity.replace(')', '')
+
+            # handle edge case for stock exchanges
+            split_entity = entity.split('(')
+            if len(split_entity) > 1:
+              wikidata_id_part1 = self.disambiguation_baseline(split_entity[0])
+              wikidata_id_part2 = self.disambiguation_baseline(split_entity[1])
+              if wikidata_id_part1 == wikidata_id_part2 or is_valid_wikidata_id(wikidata_id_part1):
+                wikidata_ids.append(wikidata_id_part1)
+              elif is_valid_wikidata_id(wikidata_id_part2):
+                wikidata_ids.append(wikidata_id_part2)
+              else:
+                wikidata_ids.append(entity)
+            else:
+              if entity.startswith("and "):
+                  entity = entity[4:].strip()
+              wikidata_id = self.disambiguation_baseline(entity)
+              if wikidata_id:
+                  wikidata_ids.append(wikidata_id)
         return wikidata_ids
