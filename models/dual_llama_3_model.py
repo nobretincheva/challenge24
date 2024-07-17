@@ -239,9 +239,9 @@ class Llama3DualPrompt(Llama3ChatModel):
             if len(split_entity) > 1:
               wikidata_id_part1 = self.disambiguation_baseline(split_entity[0])
               wikidata_id_part2 = self.disambiguation_baseline(split_entity[1])
-              if wikidata_id_part1 == wikidata_id_part2 or is_valid_wikidata_id(wikidata_id_part1):
+              if wikidata_id_part1 == wikidata_id_part2 or self.is_valid_wikidata_id(wikidata_id_part1):
                 wikidata_ids.append(wikidata_id_part1)
-              elif is_valid_wikidata_id(wikidata_id_part2):
+              elif self.is_valid_wikidata_id(wikidata_id_part2):
                 wikidata_ids.append(wikidata_id_part2)
               else:
                 wikidata_ids.append(entity)
