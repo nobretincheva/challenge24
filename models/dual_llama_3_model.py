@@ -23,14 +23,11 @@ class Llama3DualPrompt(Llama3ChatModel):
         super().__init__(config=config)
 
         self.system_message = (
-            "You have been preparing for an important quiz show."
-            " You know you will be quizzed on the following topics: the stock exchange, awards, countries and their borders, important people and their biography, TV series. "
-            " For that reason you have read extensively and prepared on each of these topics; you are now an expert in each of them. It is now the time of the competition. Clues given may not necessarily contain the answer but you know the correct answers. Score the highest score possible by following the instructions below"
-            "Given a question, your task is to recall anything you know about it first. Answer the question by giving an explanation.  After doing so, provide just the direct answer as a list (e.g. [Yes] or [2023]). "
+            "Given a question, your task is to recall anything you know about it first. Answer the question by giving an explanation and then provide just the direct answer as a list (e.g. [Yes] or [2023]). "
             "If the question can be answered simply with a yes or no - response should only be [Yes] or [No] respectively."
             "If the question can be answered with a number - write out only the number e.g. [35]."
             "If there are multiple answers, separate them with a comma. "
-            "If there are no answers, leave the list empty. "
+            #"If there are no answers, leave the list empty. "
             "Your final/direct answer should be on the last line and should be formatted like a list. Your final answer should look like this: final_answer = [YOUR FINAL ANSWER HERE]. ")
 
         self.terminators = [
@@ -49,6 +46,9 @@ class Llama3DualPrompt(Llama3ChatModel):
         templates = self.prompt_templates[relation].split(',')
         template = templates[stage]
 
+        persona = self.add_info_df.loc[relation, 'personas']
+
+
         # No few shot implementation for now
         # random_examples = []
         # if self.few_shot > 0:
@@ -63,7 +63,7 @@ class Llama3DualPrompt(Llama3ChatModel):
         messages = [
             {
                 "role": "system",
-                "content": self.system_message
+                "content": persona + self.system_message
             }
         ]
 
@@ -185,6 +185,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             )
       second_phase = self.clean_output(output, first_prompt)
 
+      print('Output 1: ' + output[0]["generated_text"][len(first_prompt):].strip())
       if not second_phase:
         return []
       
@@ -201,6 +202,9 @@ class Llama3DualPrompt(Llama3ChatModel):
                 max_new_tokens=self.max_new_tokens,
                 eos_token_id=self.terminators,
             )
+        
+        print('Output 2: ' + output[0]["generated_text"][len(second_prompt):].strip())
+
         return self.clean_output(output, second_prompt)
       else:
         return []
