@@ -27,7 +27,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             "If the question can be answered simply with a yes or no - response should only be [Yes] or [No] respectively."
             "If the question can be answered with a number - write out only the number e.g. [35]."
             "If there are multiple answers, separate them with a comma. "
-            #"If there are no answers, leave the list empty. "
+            "If there are no answers, leave the list empty. "
             "Your final/direct answer should be on the last line and should be formatted like a list. Your final answer should look like this: final_answer = [YOUR FINAL ANSWER HERE]. ")
 
         self.terminators = [
@@ -42,7 +42,7 @@ class Llama3DualPrompt(Llama3ChatModel):
 
 
     def create_prompt(self, subject_entity: str, relation: str,
-                      entity_entry, info_strategy, stage = 0) -> str:
+                      entity_entry, info_strategy, stage = 0, reask = "") -> str:
         templates = self.prompt_templates[relation].split(',')
         template = templates[stage]
 
@@ -69,10 +69,13 @@ class Llama3DualPrompt(Llama3ChatModel):
 
         # for example in random_examples:
         #     messages.extend(example)
+        question = template.format(subject_entity=subject_entity)
+        if not reask:
+          question = "Question: " + question + reask
 
         messages.append({
             "role": "user",
-            "content": self.add_external_info(entity_entry, info_strategy) + template.format(subject_entity=subject_entity)
+            "content": self.add_external_info(entity_entry, info_strategy) + question
         })
 
         prompt = self.pipe.tokenizer.apply_chat_template(
@@ -114,7 +117,8 @@ class Llama3DualPrompt(Llama3ChatModel):
       final_combined = self.combine_lists(matches_combined, matches_none)
       # edge case: sometimes LLM will answer Yes/No questions with Yes/No followed by the answer itself
       final_combined = [m[:3] if m.startswith('Yes') or m.startswith('yes') else m for m in final_combined]
-
+      # drop any empty lists
+      final_combined = [x for x in final_combined if x != []]
       return final_combined
 
 
@@ -134,7 +138,19 @@ class Llama3DualPrompt(Llama3ChatModel):
                 eos_token_id=self.terminators,
             )
       further_info = self.clean_output(output, prompt_further_info)
-        
+      if not further_info:
+        response_only = output[0]["generated_text"][len(prompt_further_info):].strip()
+        new_response = self.re_ask_model(prev_answer=response_only,
+                                        relation=inp["Relation"], 
+                                        entity_entry=inp, 
+                                        info_strategy=info_strategy, 
+                                        stage=2, 
+                                        subject_entity=inp["SubjectEntity"])
+        if not new_response:
+          return []
+        else:
+          further_info = new_response
+
       try:
         answer = further_info[0]
 
@@ -164,6 +180,33 @@ class Llama3DualPrompt(Llama3ChatModel):
         return []
 
 
+    def re_ask_model(self, prev_answer, relation, entity_entry, info_strategy, stage, subject_entity):
+      repeat_prompt =  """
+      Answer: {answer}. 
+      This answer is not formatted properly. Provide just the direct answer as a list (e.g. [Yes] or [2023]).
+      If the question can be answered with a number - write out only the number e.g. [35].
+      If there are multiple answers, separate them with a comma. 
+      If you believe that the answer is incorrect, also use your expertiese to correct it.
+      Your final/direct answer should be on the last line and should be formatted like a list. Your final answer should look like this: final_answer = [YOUR FINAL ANSWER HERE]. """
+
+      prompt = self.create_prompt(
+                subject_entity=subject_entity,
+                relation=relation,
+                entity_entry=entity_entry,
+                info_strategy=info_strategy,
+                stage=stage,
+                reask=repeat_prompt.format(answer = prev_answer)
+                )
+
+      output = self.pipe(
+                prompt,
+                max_new_tokens=self.max_new_tokens,
+                eos_token_id=self.terminators,
+            )
+      new_answer = self.clean_output(output, prompt)
+      print('Asking again: ' + output[0]["generated_text"][len(prompt):].strip())
+
+      return new_answer
 
     def use_dual_prompting(self, inp, info_strategy, extra_info=''):
       # this strategy is split into two steps: the first asks the LLM a yes/no question
@@ -186,8 +229,19 @@ class Llama3DualPrompt(Llama3ChatModel):
       second_phase = self.clean_output(output, first_prompt)
 
       print('Output 1: ' + output[0]["generated_text"][len(first_prompt):].strip())
+      
       if not second_phase:
-        return []
+        response_only = output[0]["generated_text"][len(first_prompt):].strip()
+        new_response = self.re_ask_model(prev_answer=response_only,
+                                        relation=inp["Relation"], 
+                                        entity_entry=inp, 
+                                        info_strategy=info_strategy, 
+                                        stage=0, 
+                                        subject_entity=extra_info + inp["SubjectEntity"])
+        if not new_response:
+          return []
+        else:
+          second_phase = new_response
       
       if second_phase[0].lower() == 'yes':
         second_prompt = self.create_prompt(
@@ -205,7 +259,18 @@ class Llama3DualPrompt(Llama3ChatModel):
         
         print('Output 2: ' + output[0]["generated_text"][len(second_prompt):].strip())
 
-        return self.clean_output(output, second_prompt)
+        final_result = self.clean_output(output, second_prompt)
+
+        if not final_result:
+          response_only = output[0]["generated_text"][len(second_prompt):].strip()
+          return self.re_ask_model(prev_answer=response_only,
+                                        relation=inp["Relation"], 
+                                        entity_entry=inp, 
+                                        info_strategy=info_strategy, 
+                                        stage=1, 
+                                        subject_entity=extra_info + inp["SubjectEntity"])
+        else:
+          return final_result
       else:
         return []
 
