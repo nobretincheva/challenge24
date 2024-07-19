@@ -326,7 +326,7 @@ class Llama3DualPrompt(Llama3ChatModel):
                                         relation=inp["Relation"], 
                                         entity_entry=inp, 
                                         info_strategy=info_strategy, 
-                                        stage=2, 
+                                        stage=3, 
                                         subject_entity=inp["SubjectEntity"])
         if not new_response:
           return []
