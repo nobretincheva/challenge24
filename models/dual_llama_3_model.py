@@ -8,6 +8,19 @@ import pandas as pd
 from loguru import logger
 from tqdm import tqdm
 
+import spacy
+
+nlp = spacy.load('en_core_web_sm')
+
+def remove_titles_with_spacy(text):
+    doc = nlp(text)
+    # Extract entities identified as PERSON and join them
+    person_names = ' '.join([ent.text for ent in doc.ents if ent.label_ == 'PERSON'])
+    
+    # Return the original text as a fallback if no PERSON entity is found
+    return person_names if person_names else text
+
+
 from models.baseline_llama_3_chat_model import Llama3ChatModel
 
 class Llama3DualPrompt(Llama3ChatModel):
@@ -349,8 +362,10 @@ class Llama3DualPrompt(Llama3ChatModel):
         for inp in tqdm(inputs, desc="Generating predictions"):
 
             qa_answer = exec_strategy[inp["Relation"]](inp, info_strategy=info_strategy) 
-
-            wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
+            flat_answer = [x for xs in qa_answer for x in xs]
+            wikidata_ids = self.disambiguate_entities(flat_answer)
+            
+            #wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
             results.append({
                 "SubjectEntityID": inp["SubjectEntityID"],
                 "SubjectEntity": inp["SubjectEntity"],
@@ -378,8 +393,8 @@ class Llama3DualPrompt(Llama3ChatModel):
             # handle edge case for stock exchanges
             split_entity = entity.split('(')
             if len(split_entity) > 1:
-              wikidata_id_part1 = self.disambiguation_baseline(split_entity[0])
-              wikidata_id_part2 = self.disambiguation_baseline(split_entity[1])
+              wikidata_id_part1 = self.disambiguation_baseline(remove_titles_with_spacy(split_entity[0]))
+              wikidata_id_part2 = self.disambiguation_baseline(remove_titles_with_spacy(split_entity[1]))
               if wikidata_id_part1 == wikidata_id_part2 or self.is_valid_wikidata_id(wikidata_id_part1):
                 wikidata_ids.append(wikidata_id_part1)
               elif self.is_valid_wikidata_id(wikidata_id_part2):
@@ -389,7 +404,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             else:
               if entity.startswith("and "):
                   entity = entity[4:].strip()
-              wikidata_id = self.disambiguation_baseline(entity)
+              wikidata_id = self.disambiguation_baseline(remove_titles_with_spacy(entity))
               if wikidata_id:
                   wikidata_ids.append(wikidata_id)
         return wikidata_ids
