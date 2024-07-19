@@ -2,6 +2,7 @@ import json
 import random
 import regex
 import ast
+import string
 import pandas as pd
 
 from loguru import logger
@@ -47,6 +48,9 @@ class Llama3DualPrompt(Llama3ChatModel):
         template = templates[stage]
 
         persona = self.add_info_df.loc[relation, 'personas']
+        extra_input = [tup[1] for tup in string.Formatter().parse(persona) if tup[1] is not None]
+        if extra_input:
+          persona = persona.format(entity=subject_entity)
 
 
         # No few shot implementation for now
@@ -178,6 +182,8 @@ class Llama3DualPrompt(Llama3ChatModel):
                         eos_token_id=self.terminators,
                     )
             ith_answer = self.clean_output(output, prompt)
+            print('Loop ' + str(i) + ': ' + output[0]["generated_text"][len(prompt):].strip())
+
             int_answers = [num for num in ith_answer if num.isdigit()] 
             if not int_answers:
               response_only = output[0]["generated_text"][len(prompt):].strip()
