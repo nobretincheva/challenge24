@@ -303,17 +303,52 @@ class Llama3DualPrompt(Llama3ChatModel):
       else:
         return []
 
+    def direct_strategy(self, inp, info_strategy):
+      prompt = self.create_prompt(
+                subject_entity=inp["SubjectEntity"],
+                relation=inp["Relation"],
+                entity_entry=inp,
+                info_strategy=info_strategy,
+                stage=3
+            )
+
+      output = self.pipe(
+                prompt,
+                max_new_tokens=self.max_new_tokens,
+                eos_token_id=self.terminators,
+            )
+      further_info = self.clean_output(output, prompt)
+      further_info = [num for num in further_info if num.isdigit()] 
+
+      if not further_info:
+        response_only = output[0]["generated_text"][len(prompt):].strip()
+        new_response = self.re_ask_model(prev_answer=response_only,
+                                        relation=inp["Relation"], 
+                                        entity_entry=inp, 
+                                        info_strategy=info_strategy, 
+                                        stage=2, 
+                                        subject_entity=inp["SubjectEntity"])
+        if not new_response:
+          return []
+        else:
+          further_info = new_response
+      
+      return further_info
+
     def generate_predictions(self, inputs):
-        loop_strategy = ['awardWonBy', 'seriesHasNumberOfEpisodes']
         # hard coding for now; add with an input variable later on OR add to the prompts doc
         info_strategy = ['additionalData', 'wikipediaExtract']
-
         logger.info("Generating predictions...")
+        exec_strategy = {'awardWonBy': self.use_looping_prompts,
+        'seriesHasNumberOfEpisodes': self.direct_strategy,
+        'countryLandBordersCountry': self.use_dual_prompting,
+        'companyTradesAtStockExchange': self.use_dual_prompting,
+        'personHasCityOfDeath': self.use_dual_prompting,}
 
         results = []
         for inp in tqdm(inputs, desc="Generating predictions"):
 
-            qa_answer = self.use_looping_prompts(inp, info_strategy=info_strategy) if inp["Relation"] in loop_strategy else self.use_dual_prompting(inp, info_strategy=info_strategy)
+            qa_answer = exec_strategy[inp["Relation"]](inp, info_strategy=info_strategy) 
 
             wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
             results.append({
