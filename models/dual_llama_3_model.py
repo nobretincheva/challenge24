@@ -163,8 +163,30 @@ class Llama3DualPrompt(Llama3ChatModel):
         running_sum = 0
         for i in range(start_count, end_count):
           extra_info = str(i) + ' ' if inp["Relation"]=='awardWonBy' else str(i) + ' of '
-          ith_answer = self.use_dual_prompting(inp, info_strategy=info_strategy, extra_info=extra_info)
           if inp["Relation"]=='seriesHasNumberOfEpisodes':
+            
+            prompt = self.create_prompt(
+                subject_entity= extra_info + inp["SubjectEntity"],
+                relation=inp["Relation"],
+                entity_entry=inp,
+                info_strategy=info_strategy,
+                stage=1
+            )
+            output = self.pipe(
+                        prompt,
+                        max_new_tokens=self.max_new_tokens,
+                        eos_token_id=self.terminators,
+                    )
+            ith_answer = self.clean_output(output, prompt)
+            int_answers = [num for num in ith_answer if num.isdigit()] 
+            if not int_answers:
+              response_only = output[0]["generated_text"][len(prompt):].strip()
+              ith_answer = self.re_ask_model(prev_answer=response_only,
+                                        relation=inp["Relation"], 
+                                        entity_entry=inp, 
+                                        info_strategy=info_strategy, 
+                                        stage=1, 
+                                        subject_entity=extra_info + inp["SubjectEntity"])
             try:
               if ith_answer:
                 num_ep_per_season = int(ith_answer[0])
@@ -172,6 +194,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             except:
               logger.error(f"Error getting number of episodes for season {i} of " + inp["SubjectEntity"])
           else:
+            ith_answer = self.use_dual_prompting(inp, info_strategy=info_strategy, extra_info=extra_info)
             final_answer.append(ith_answer)
 
         return [str(running_sum)] if inp["Relation"]=='seriesHasNumberOfEpisodes' else final_answer
