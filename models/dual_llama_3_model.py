@@ -216,7 +216,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             ith_answer = self.use_dual_prompting(inp, info_strategy=info_strategy, extra_info=extra_info)
             final_answer.append(ith_answer)
 
-        return [str(running_sum)] if inp["Relation"]=='seriesHasNumberOfEpisodes' else final_answer
+        return [str(running_sum)] if inp["Relation"]=='seriesHasNumberOfEpisodes' else [x for xs in final_answer for x in xs]
       except:
         print('could not convert')
         return []
@@ -331,7 +331,10 @@ class Llama3DualPrompt(Llama3ChatModel):
                 eos_token_id=self.terminators,
             )
       further_info = self.clean_output(output, prompt)
-      further_info = [num for num in further_info if num.isdigit()] 
+      if inp["Relation"] == 'seriesHasNumberOfEpisodes':
+        further_info = [a.split(',') for a in further_info]
+        further_info = [x for xs in further_info for x in xs]
+        further_info = [int(x) for x in further_info if x.isdigit()] 
 
       if not further_info:
         response_only = output[0]["generated_text"][len(prompt):].strip()
@@ -341,12 +344,20 @@ class Llama3DualPrompt(Llama3ChatModel):
                                         info_strategy=info_strategy, 
                                         stage=3, 
                                         subject_entity=inp["SubjectEntity"])
+        print('new response: ')
+        print(new_response)
         if not new_response:
           return []
         else:
-          further_info = new_response
+          if inp["Relation"] == 'seriesHasNumberOfEpisodes':
+            further_info = [a.split(',') for a in new_response]
+            further_info = [x for xs in further_info for x in xs]
+            further_info = [int(x) for x in further_info if x.isdigit()]
+          else:
+            further_info = new_response  
+
       
-      return further_info
+      return [sum(further_info)] if inp["Relation"] == 'seriesHasNumberOfEpisodes' else further_info
 
     def generate_predictions(self, inputs):
         # hard coding for now; add with an input variable later on OR add to the prompts doc
@@ -362,8 +373,7 @@ class Llama3DualPrompt(Llama3ChatModel):
         for inp in tqdm(inputs, desc="Generating predictions"):
 
             qa_answer = exec_strategy[inp["Relation"]](inp, info_strategy=info_strategy) 
-            flat_answer = [x for xs in qa_answer for x in xs]
-            wikidata_ids = self.disambiguate_entities(flat_answer)
+            wikidata_ids = self.disambiguate_entities(qa_answer)
             
             #wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
             results.append({
@@ -381,6 +391,10 @@ class Llama3DualPrompt(Llama3ChatModel):
 
     def disambiguate_entities(self, qa_answer: str):
         wikidata_ids = []
+        if any(isinstance(x, int) for x in qa_answer):
+          wikidata_id = self.disambiguation_baseline(qa_answer[0])
+          return [wikidata_id]
+
         qa_entities = [a.split(',') for a in qa_answer]
         flat_entities = [x for xs in qa_entities for x in xs]
 
