@@ -402,6 +402,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             # further clean up string
             entity = entity.strip()
             entity = entity.replace('"', '')
+            entity = entity.replace('\'', '')
             entity = entity.replace(')', '')
 
             # handle edge case for stock exchanges
