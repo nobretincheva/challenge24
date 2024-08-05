@@ -36,6 +36,8 @@ class Llama3DualPrompt(Llama3ChatModel):
 
         super().__init__(config=config)
 
+        # system message requests explanation first
+        # final answers should be formatted as final_answer = \[...\]
         self.system_message = (
             "Given a question, your task is to recall anything you know about it first. Answer the question by giving an explanation and then provide just the direct answer as a list (e.g. [Yes] or [2023]). "
             "If the question can be answered simply with a yes or no - response should only be [Yes] or [No] respectively."
@@ -65,18 +67,6 @@ class Llama3DualPrompt(Llama3ChatModel):
         if extra_input:
           persona = persona.format(entity=subject_entity)
 
-
-        # No few shot implementation for now
-        # random_examples = []
-        # if self.few_shot > 0:
-        #     pool = [example["messages"] for example in self.in_context_examples
-        #             if example["relation"] == relation]
-        #     # pool = [example["messages"] for example in self.in_context_examples]
-        #     random_examples = random.sample(
-        #         pool,
-        #         min(self.few_shot, len(pool))
-        #     )
-
         messages = [
             {
                 "role": "system",
@@ -84,11 +74,10 @@ class Llama3DualPrompt(Llama3ChatModel):
             }
         ]
 
-        # for example in random_examples:
-        #     messages.extend(example)
         question = template.format(subject_entity=subject_entity)
-        if not reask:
-          question = "Question: " + question + reask
+        # Re-asking strategy with history - not used in final pipeline                  
+        # if reask:
+        #   question = "Question: " + question + reask
 
         messages.append({
             "role": "user",
@@ -140,7 +129,8 @@ class Llama3DualPrompt(Llama3ChatModel):
 
 
     def use_looping_prompts(self, inp, info_strategy):
-      # strategy used for seriesHasNumberOfEpisodes and awardWonBy
+      # strategy used in experiments for seriesHasNumberOfEpisodes
+      # strategy used for awardWonBy
       prompt_further_info = self.create_prompt(
                 subject_entity=inp["SubjectEntity"],
                 relation=inp["Relation"],
@@ -171,8 +161,6 @@ class Llama3DualPrompt(Llama3ChatModel):
       try:
         answer = further_info[0]
 
-        # this is an ugly way to implement this so far
-        # TODO: implement in a less hard-coded way
         start_count = int(answer) if inp["Relation"]=='awardWonBy' else 1
         end_count = int(answer) if inp["Relation"]=='seriesHasNumberOfEpisodes' else 2024
 
@@ -195,7 +183,7 @@ class Llama3DualPrompt(Llama3ChatModel):
                         eos_token_id=self.terminators,
                     )
             ith_answer = self.clean_output(output, prompt)
-            print('Loop ' + str(i) + ': ' + output[0]["generated_text"][len(prompt):].strip())
+            # print('Loop ' + str(i) + ': ' + output[0]["generated_text"][len(prompt):].strip())
 
             int_answers = [num for num in ith_answer if num.isdigit()] 
             if not int_answers:
@@ -246,7 +234,7 @@ class Llama3DualPrompt(Llama3ChatModel):
                 eos_token_id=self.terminators,
             )
       new_answer = self.clean_output(output, prompt)
-      print('Asking again: ' + output[0]["generated_text"][len(prompt):].strip())
+      # print('Asking again: ' + output[0]["generated_text"][len(prompt):].strip())
 
       return new_answer
 
@@ -270,7 +258,7 @@ class Llama3DualPrompt(Llama3ChatModel):
             )
       second_phase = self.clean_output(output, first_prompt)
 
-      print('Output 1: ' + output[0]["generated_text"][len(first_prompt):].strip())
+      # print('Output 1: ' + output[0]["generated_text"][len(first_prompt):].strip())
       
       if not second_phase:
         response_only = output[0]["generated_text"][len(first_prompt):].strip()
@@ -299,7 +287,7 @@ class Llama3DualPrompt(Llama3ChatModel):
                 eos_token_id=self.terminators,
             )
         
-        print('Output 2: ' + output[0]["generated_text"][len(second_prompt):].strip())
+        # print('Output 2: ' + output[0]["generated_text"][len(second_prompt):].strip())
 
         final_result = self.clean_output(output, second_prompt)
 
@@ -360,9 +348,10 @@ class Llama3DualPrompt(Llama3ChatModel):
       return [sum(further_info)] if inp["Relation"] == 'seriesHasNumberOfEpisodes' else further_info
 
     def generate_predictions(self, inputs):
-        # hard coding for now; add with an input variable later on OR add to the prompts doc
+        # which type of additional info to use; leave empty if none
         info_strategy = ['additionalData', 'wikipediaExtract']
         logger.info("Generating predictions...")
+        # which prompting strategy to use with each relation
         exec_strategy = {'awardWonBy': self.use_looping_prompts,
         'seriesHasNumberOfEpisodes': self.direct_strategy,
         'countryLandBordersCountry': self.use_dual_prompting,
@@ -375,7 +364,6 @@ class Llama3DualPrompt(Llama3ChatModel):
             qa_answer = exec_strategy[inp["Relation"]](inp, info_strategy=info_strategy) 
             wikidata_ids = self.disambiguate_entities(qa_answer)
             
-            #wikidata_ids = self.disambiguate_entities(list(set(qa_answer)))
             results.append({
                 "SubjectEntityID": inp["SubjectEntityID"],
                 "SubjectEntity": inp["SubjectEntity"],
