@@ -1,0 +1,6 @@
+Relation,additionalDataPrompt,entityDescriptionPrompt,alternativeLabelsPrompt,wikipediaExtractPrompt,personas
+countryLandBordersCountry,{entity} is an instance of a {info}. ,{entity} can be described as a {info}.,{entity} is also known as {info}.,Here is an extract from the Wikipedia page for {entity}: {info}, 
+personHasCityOfDeath,{entity}'s date of birth is {info}. ,{entity} can be described as a {info}.,{entity} is also known as {info}.,Here is an extract from the Wikipedia page for {entity}: {info}, 
+seriesHasNumberOfEpisodes,I only know that {entity} has {info} season/s.,{entity} can be described as a {info}.,{entity} is also known as {info}.,From the Wikipedia page for {entity} I learned that {info} , 
+awardWonBy,{entity} has been awarded since {info}. ,{entity} can be described as a {info}.,{entity} is also known as {info}.,Here is an extract from the Wikipedia page for {entity}: {info}, 
+companyTradesAtStockExchange,{entity}'s legal form is a {info}. ,{entity} can be described as a {info}.,{entity} is also known as {info}.,Here is an extract from the Wikipedia page for {entity}: {info}, 

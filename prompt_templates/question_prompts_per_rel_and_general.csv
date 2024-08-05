@@ -1,0 +1,6 @@
+Relation,PromptTemplate
+countryLandBordersCountry,"Final answer should be yes or no. Does {subject_entity} share any land borders?, Final answer should consist of country name(s).  Which countries share a land border with {subject_entity}?"
+personHasCityOfDeath,"Final answer should be yes or no. Has {subject_entity} died?, Final answer should consist of a city name. In which city did {subject_entity} die?"
+seriesHasNumberOfEpisodes,"Final answer should be yes or no. Is there a season {subject_entity}?, Final answer should consist of a number. How many episodes does season {subject_entity} have?, Final answer should consist of a number. How many seasons does the series {subject_entity}  have?, Final answer should consist of a number. How many episodes does {subject_entity} have? "
+awardWonBy,"Final answer should be yes or no. Was the {subject_entity} awarded?, Final answer should consist of name(s). Who was the {subject_entity} awarded to?, Final answer should consist of a year (e.g. 1234). When was the first {subject_entity} awarded?"
+companyTradesAtStockExchange,"Final answer should be yes or no. Is the {subject_entity} listed on the stock exchange?, Final answer should consist of name(s) of stock exchange(s). Where do shares of {subject_entity} trade?"
